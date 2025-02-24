@@ -1,10 +1,5 @@
 #!/bin/bash
 
-#SBATCH -N 1
-#SBATCH -o output.out
-#SBATCH -e output.err
-#SBATCH --mem=3G
-
 # Input CSV file containing coordinates
 input_csv="extracted_coords_IR_events.csv"
 

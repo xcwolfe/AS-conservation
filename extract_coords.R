@@ -1,4 +1,4 @@
-library("tidyverse")
+library(tidyverse)
 
 # Extract start and end coordinates of each IR event:
 intron_sums_heatmap <- read.csv("intron_sums_heatmap.csv")
@@ -19,4 +19,4 @@ extracted_coords <- lapply(rownames(intron_sums_heatmap), function(rowname) {
 
 extracted_coords <- do.call(rbind, extracted_coords)
 rownames(extracted_coords) <- intron_sums_heatmap$AS_event_ID
-write.csv(extracted_coords, file = "extracted_coords_IR_events.csv")   ### move this file to HPCC and run average_phylop_score_for_IR_events.txt
+write.csv(extracted_coords, file = "extracted_coords_IR_events.csv")   ### move this file to a shell environment and run average_phylop_score_for_IR_events.txt

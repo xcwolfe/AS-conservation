@@ -49,7 +49,7 @@ tail -n +2 "$input_csv" | while IFS=',' read -r AS_event_ID chr start end; do
 
         # Sum the scores and count the number of valid scores
         for score in "${scores_array[@]}"; do
-            if [[ "$score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            if [[ "$score" =~ ^-?[0-9]+(\.[0-9]+)?$ ]]; then
                 total=$(echo "$total + $score" | bc)
                 ((count++))
             fi

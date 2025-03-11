@@ -1,10 +1,54 @@
 library(tidyverse)
+library("patchwork")
+library("ggpubr")
+library("rtracklayer")
+library("GenomicRanges")
 
-# Once you have run the Unix script average_phylop_score_for_IR_events.txt on HPCC, import your average scores for each IR event here:
+# import .bw (conservation score) file:
+bw <- import.bw("ce11.phyloP26way.bw")
 
-intron_phylop <- read_tsv("phyloP_scores_combined.txt")
-intron_phylop <- as.data.frame(intron_phylop)
-intron_phylop$Average_Score <- as.numeric(intron_phylop$Average_Score)   # convert the Average_Score column to numeric
+# Extract start and end coordinates of each IR event:
+extracted_coords <- lapply(intron_sums_heatmap$AS_event_ID, function(id) {
+  parts <- unlist(strsplit(id, "_"))
+  chr <- as.character(parts[1])
+  start <- as.numeric(parts[3])
+  end <- as.numeric(parts[4])
+  return(c(chr, start, end))
+})
+
+extracted_coords <- do.call(rbind, extracted_coords)
+rownames(extracted_coords) <- intron_sums_heatmap$AS_event_ID
+
+# Initialize output data frame
+phyloP_scores_combined <- data.frame(AS_event_ID = character(), Chr = character(), Start = integer(), 
+                        End = integer(), Average_Score = numeric(), stringsAsFactors = FALSE)
+
+# Process each row of extracted_coords
+for (i in seq_len(nrow(extracted_coords))) {
+  AS_event_ID <- rownames(extracted_coords)[i]
+  chr <- paste0("chr", extracted_coords[i, 1])
+  start <- as.integer(extracted_coords[i, 2])
+  end <- as.integer(extracted_coords[i, 3])
+  
+  # Check if start and end are valid
+  if (!is.na(start) && !is.na(end) && start < end) {
+    # Extract phyloP scores from the BigWig file
+    scores <- import.bw("ce11.phyloP26way.bw", which = GRanges(chr, IRanges(start, end)))$score
+    
+    # Compute average score
+    average <- if (length(scores) > 0) mean(scores, na.rm = TRUE) else NA
+    
+  # Debugging output
+  cat(sprintf("Processing: AS_event_ID=%s, Chr=%s, Start=%d, End=%d, average=%f\n", AS_event_ID, chr, start, end, average))
+  
+    # Append result to output data frame
+    phyloP_scores_combined <- rbind(phyloP_scores_combined, data.frame(AS_event_ID, chr, start, end, average, stringsAsFactors = FALSE))
+  } else {
+    cat(sprintf("Skipping invalid coordinates: AS_event_ID=%s (%s, %d, %d)\n", AS_event_ID, chr, start, end))
+  }
+}
+
+intron_phylop <- as.data.frame(phyloP_scores_combined)
 col_name <- "PhyloP score"
 colnames(intron_phylop)[5] <- col_name
 
@@ -70,10 +114,13 @@ ggplot(combined_data, aes(x = Min_Value, y = `PhyloP score`)) +
 regression_results <- data.frame(Column = character(),Intercept = numeric(),Slope = numeric(),R_Squared = numeric(),P_Value = numeric(),stringsAsFactors = FALSE)
 
 for (i in singletypes) {
-  uniqueness_values <- intron_sums_heatmap[[i]]
+  uniqueness_values <- intron_sums_heatmap
+  valid_indices <- row_number(intersect(phyloP_scores_combined$AS_event_ID, uniqueness_values$AS_event_ID))
+  uniqueness_values <- intron_sums_heatmap[valid_indices,i]
   regression_data <- data.frame(uniqueness_values, PhyloP_score = intron_phylop$`PhyloP score`)
   regression_data <- regression_data[complete.cases(regression_data),]
-  # eliminate zero-uniqueness values from graph/regression (optional, but may be helpful):
+  # eliminate zero-uniqueness values from graph/regression??
+  # doesn't really help that much...
   regression_data <- regression_data[regression_data$uniqueness_values != 0,]
   
   lm_model <- lm(PhyloP_score ~ uniqueness_values, data = regression_data)
@@ -105,7 +152,6 @@ p <- ggplot(regression_data, aes(x = uniqueness_values, y = PhyloP_score)) +
 
 print(p)
 }
-
 
 # Now do a logistic regression with high, low, and mid uniqueness values:
 
@@ -188,6 +234,6 @@ print(p)
 
 intron_phylop <- intron_phylop[order(-intron_phylop$`PhyloP score`),]
 intron_phylop$Gene <- mega_intron$Gene[match(intron_phylop$AS_event_ID, mega_intron$AS_event_ID)]
-intron_phylop <- intron_phylop[,c("AS_event_ID","Chr","Start","End","Gene","PhyloP score")]
+intron_phylop <- intron_phylop[,c("AS_event_ID","chr","start","end","Gene","PhyloP score")]
 write.csv(intron_phylop, file = "intron_retention_phylop_scores.csv", row.names = F)
 
